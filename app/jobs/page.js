@@ -1,72 +1,12 @@
-import db from "../../lib/db";
-import { fetchJobs } from "../../lib/jobs";
-import { normalizeJob } from "../../lib/normalizeJob";
+import {
+  getJobs,
+} from "../../lib/jobs.js";
 
-import Navbar from "../../components/Navbar";
-import JobCard from "../../components/JobCard";
-import SearchBar from "../../components/SearchBar";
-import JobFilters from "../../components/JobFilters";
-import AdSlot from "../../components/AdSlot";
-
-async function importJobs(query) {
-  try {
-    const apiJobs = await fetchJobs(query);
-
-    if (!apiJobs.length) {
-      return;
-    }
-
-    const insert = db.prepare(`
-      INSERT INTO jobs (
-        externalId,
-        source,
-        title,
-        company,
-        location,
-        salary,
-        description,
-        url,
-        employmentType,
-        remoteType,
-        experience,
-        postedAt
-      )
-      VALUES (
-        @externalId,
-        @source,
-        @title,
-        @company,
-        @location,
-        @salary,
-        @description,
-        @url,
-        @employmentType,
-        @remoteType,
-        @experience,
-        @postedAt
-      )
-      ON CONFLICT(source, externalId)
-      DO UPDATE SET
-        title = excluded.title,
-        company = excluded.company,
-        location = excluded.location,
-        salary = excluded.salary,
-        description = excluded.description,
-        url = excluded.url,
-        updatedAt = CURRENT_TIMESTAMP
-    `);
-
-    const transaction = db.transaction((jobs) => {
-      for (const job of jobs) {
-        insert.run(normalizeJob(job));
-      }
-    });
-
-    transaction(apiJobs);
-  } catch (error) {
-    console.error("Job import failed:", error);
-  }
-}
+import Navbar from "../../components/Navbar.js";
+import JobCard from "../../components/JobCard.js";
+import SearchBar from "../../components/SearchBar.js";
+import JobFilters from "../../components/JobFilters.js";
+import AdSlot from "../../components/AdSlot.js";
 
 export default async function JobsPage({ searchParams }) {
   const params = await searchParams;
@@ -78,60 +18,12 @@ export default async function JobsPage({ searchParams }) {
   const source = params?.source || "";
   const sort = params?.sort || "newest";
 
-  /*
-   * Import fresh jobs when the user searches.
-   */
-  await importJobs(query);
-
-  let sql = `
-    SELECT *
-    FROM jobs
-    WHERE 1 = 1
-  `;
-
-  const values = {};
-
-  if (query) {
-    sql += `
-      AND (
-        title LIKE @query
-        OR company LIKE @query
-        OR description LIKE @query
-      )
-    `;
-
-    values.query = `%${query}%`;
-  }
-
-  if (location) {
-    sql += ` AND location LIKE @location`;
-    values.location = `%${location}%`;
-  }
-
-  if (remote) {
-    sql += ` AND remoteType = @remote`;
-    values.remote = remote;
-  }
-
-  if (experience) {
-    sql += ` AND experience LIKE @experience`;
-    values.experience = `%${experience}%`;
-  }
-
-  if (source) {
-    sql += ` AND source = @source`;
-    values.source = source;
-  }
-
-  if (sort === "newest") {
-    sql += ` ORDER BY datetime(postedAt) DESC`;
-  } else {
-    sql += ` ORDER BY title ASC`;
-  }
-
-  sql += ` LIMIT 50`;
-
-  const jobs = db.prepare(sql).all(values);
+  const jobs = await getJobs({
+    search: query,
+    location,
+    remote,
+    limit: 50,
+  });
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -194,10 +86,18 @@ export default async function JobsPage({ searchParams }) {
                   />
                 )}
 
+                {remote && (
+                  <input
+                    type="hidden"
+                    name="remote"
+                    value={remote}
+                  />
+                )}
+
                 <select
                   name="sort"
                   defaultValue={sort}
-                  className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none"
+                  className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none"
                 >
                   <option value="newest">
                     Newest
@@ -208,7 +108,10 @@ export default async function JobsPage({ searchParams }) {
                   </option>
                 </select>
 
-                <button className="ml-2 rounded-xl bg-gray-900 px-4 py-2 text-sm font-medium text-white">
+                <button
+                  type="submit"
+                  className="ml-2 rounded-xl bg-gray-900 px-4 py-2 text-sm font-medium text-white"
+                >
                   Sort
                 </button>
 

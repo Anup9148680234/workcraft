@@ -1,34 +1,32 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import db from "../../../lib/db";
-import Navbar from "../../../components/Navbar";
-import AdSlot from "../../../components/AdSlot";
-import JobCard from "../../../components/JobCard";
+
+import {
+  getJobById,
+  getJobs,
+} from "../../../lib/jobs.js";
+
+import Navbar from "../../../components/Navbar.js";
+import AdSlot from "../../../components/AdSlot.js";
+import JobCard from "../../../components/JobCard.js";
+import SaveJobButton from "../../../components/SaveJobButton.js";
 
 export default async function JobPage({ params }) {
   const { id } = await params;
 
-  const job = db
-    .prepare("SELECT * FROM jobs WHERE id = ?")
-    .get(id);
+  const job = await getJobById(id);
 
   if (!job) {
     notFound();
   }
 
-  const relatedJobs = db
-    .prepare(`
-      SELECT *
-      FROM jobs
-      WHERE id != ?
-      AND (
-        company = ?
-        OR title LIKE ?
-      )
-      ORDER BY datetime(postedAt) DESC
-      LIMIT 3
-    `)
-    .all(id, job.company, `%${job.title.split(" ")[0]}%`);
+  const relatedJobs = await getJobs({
+    search: job.title.split(" ")[0],
+    limit: 3,
+  });
+
+  const filteredRelatedJobs = relatedJobs.filter(
+    (relatedJob) => String(relatedJob.id) !== String(job.id)
+  );
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -63,9 +61,7 @@ export default async function JobPage({ params }) {
                   </p>
                 </div>
 
-                <button className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
-                  Save Job
-                </button>
+                <SaveJobButton jobId={job.id} />
 
               </div>
 
@@ -154,7 +150,11 @@ export default async function JobPage({ params }) {
               </h2>
 
               <div className="mt-5 whitespace-pre-line text-sm leading-7 text-gray-600">
-                <div dangerouslySetInnerHTML={{ __html: job.description }} />
+                <div
+                  dangerouslySetInnerHTML={{
+                    __html: job.description,
+                  }}
+                />
               </div>
 
             </article>
@@ -165,7 +165,7 @@ export default async function JobPage({ params }) {
             </div>
 
             {/* Related Jobs */}
-            {relatedJobs.length > 0 && (
+            {filteredRelatedJobs.length > 0 && (
               <section>
 
                 <h2 className="mb-4 text-xl font-bold text-gray-950">
@@ -173,7 +173,7 @@ export default async function JobPage({ params }) {
                 </h2>
 
                 <div className="space-y-4">
-                  {relatedJobs.map((relatedJob) => (
+                  {filteredRelatedJobs.map((relatedJob) => (
                     <JobCard
                       key={relatedJob.id}
                       job={relatedJob}
