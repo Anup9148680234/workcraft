@@ -6,12 +6,9 @@ export default function AdSlot({ type = "banner" }) {
   };
 
   return (
-    <div
-      className={`${sizes[type]} w-full rounded-xl border border-dashed border-gray-300 bg-gray-50 flex items-center justify-center`}
+    <div 
     >
-      <span className="text-xs font-medium tracking-widest text-gray-400">
-        ADVERTISEMENT
-      </span>
+  
     </div>
   );
 }
